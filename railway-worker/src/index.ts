@@ -48,6 +48,8 @@ if (process.env.REDIS_HOST) {
     worker.on('failed', (job, err) => {
         console.log(`Job ${job?.id} has failed with ${err.message}`);
     });
+
+    console.log('✅ BullMQ worker started');
 } else {
-    console.log('Redis not configured. Queue worker not started.');
+    console.log('⚠️  Redis not configured. Queue worker not started. Comments will be processed synchronously.');
 }

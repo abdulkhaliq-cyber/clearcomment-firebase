@@ -5,19 +5,24 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 // Queue for async processing
-// Note: Requires Redis connection. If Redis is not available, this will fail.
-// For local dev without Redis, we might want to bypass the queue.
-const redisConnection = {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-    password: process.env.REDIS_PASSWORD,
-};
-
+// Note: Requires Redis connection. If Redis is not available, we process synchronously.
 let commentQueue: Queue | null = null;
-try {
-    commentQueue = new Queue('comment-processing', { connection: redisConnection });
-} catch (e) {
-    console.warn('Failed to initialize BullMQ queue. Redis might be missing.');
+
+if (process.env.REDIS_HOST) {
+    const redisConnection = {
+        host: process.env.REDIS_HOST,
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+        password: process.env.REDIS_PASSWORD,
+    };
+
+    try {
+        commentQueue = new Queue('comment-processing', { connection: redisConnection });
+        console.log('✅ BullMQ queue initialized with Redis');
+    } catch (e) {
+        console.warn('⚠️  Failed to initialize BullMQ queue:', e);
+    }
+} else {
+    console.warn('⚠️  REDIS_HOST not set. Comments will be processed synchronously.');
 }
 
 export const verifyWebhook = (req: Request, res: Response) => {
