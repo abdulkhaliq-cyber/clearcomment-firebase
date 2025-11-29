@@ -26,3 +26,80 @@ const db = getFirestore(app);
 
 // Export the services
 export { app, analytics, auth, db };
+
+// Auth Providers
+import {
+    GoogleAuthProvider,
+    FacebookAuthProvider,
+    signInWithPopup,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged
+} from "firebase/auth";
+
+const googleProvider = new GoogleAuthProvider();
+const facebookProvider = new FacebookAuthProvider();
+
+// Auth Functions
+export const loginWithGoogle = async () => {
+    try {
+        const result = await signInWithPopup(auth, googleProvider);
+        return result.user;
+    } catch (error) {
+        console.error("Error logging in with Google", error);
+        throw error;
+    }
+};
+
+export const loginWithFacebook = async () => {
+    try {
+        const result = await signInWithPopup(auth, facebookProvider);
+        return result.user;
+    } catch (error) {
+        console.error("Error logging in with Facebook", error);
+        throw error;
+    }
+};
+
+export const loginWithEmail = async (email, password) => {
+    try {
+        const result = await signInWithEmailAndPassword(auth, email, password);
+        return result.user;
+    } catch (error) {
+        console.error("Error logging in with Email", error);
+        throw error;
+    }
+};
+
+export const registerWithEmail = async (email, password) => {
+    try {
+        const result = await createUserWithEmailAndPassword(auth, email, password);
+        return result.user;
+    } catch (error) {
+        console.error("Error registering with Email", error);
+        throw error;
+    }
+};
+
+export const logout = async () => {
+    try {
+        await signOut(auth);
+    } catch (error) {
+        console.error("Error logging out", error);
+        throw error;
+    }
+};
+
+// Role-based access helper
+export const getUserRole = async (user) => {
+    if (!user) return null;
+    try {
+        const idTokenResult = await user.getIdTokenResult();
+        // Returns custom claims like { admin: true, moderator: true }
+        return idTokenResult.claims;
+    } catch (error) {
+        console.error("Error getting user role", error);
+        return null;
+    }
+};

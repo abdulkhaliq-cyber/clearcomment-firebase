@@ -2,8 +2,58 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+    
+    // Helper to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper to check if user matches the requested ID
+    function isUser(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Users collection: uid, name, email, photoURL, role
+    match /users/{userId} {
+      allow read, write: if isUser(userId);
+    }
+
+    // Pages collection: pageId, pageName, userId, accessToken, moderationEnabled
+    match /pages/{pageId} {
+      // Allow create if the userId in data matches the auth uid
+      allow create: if isUser(request.resource.data.userId);
+      // Allow read/write if the existing document's userId matches auth uid
+      allow read, update, delete: if isUser(resource.data.userId);
+    }
+
+    // Comments collection: commentId, pageId, content, authorId, createdAt, status, moderatedBy
+    match /comments/{commentId} {
+      // Writable ONLY by backend (Admin SDK bypasses these rules)
+      allow write: if false;
+      
+      // Readable if the user owns the page this comment belongs to
+      // Note: This requires a get() call which affects billing, but ensures security
+      allow read: if isAuthenticated() && 
+        get(/databases/$(database)/documents/pages/$(resource.data.pageId)).data.userId == request.auth.uid;
+    }
+
+    // Rules collection: ruleId, pageId, type, keyword, replyText, isEnabled
+    match /rules/{ruleId} {
+      // Allow create if user owns the referenced page
+      allow create: if isAuthenticated() && 
+        get(/databases/$(database)/documents/pages/$(request.resource.data.pageId)).data.userId == request.auth.uid;
+        
+      // Allow read/write if user owns the referenced page
+      allow read, update, delete: if isAuthenticated() && 
+        get(/databases/$(database)/documents/pages/$(resource.data.pageId)).data.userId == request.auth.uid;
+    }
+
+    // Logs collection: actionId, commentId, ruleId, userId, actionType, timestamp
+    match /logs/{logId} {
+      // Writable ONLY by backend
+      allow write: if false;
+      // Readable by the user associated with the log
+      allow read: if isUser(resource.data.userId);
     }
   }
 }
