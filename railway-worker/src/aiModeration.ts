@@ -3,9 +3,16 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+// Only initialize OpenAI if API key is provided
+let openai: OpenAI | null = null;
+
+if (process.env.OPENAI_API_KEY) {
+    openai = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+    });
+} else {
+    console.warn('⚠️  OPENAI_API_KEY not set. AI moderation will be disabled.');
+}
 
 export interface ModerationResult {
     flagged: boolean;
@@ -15,8 +22,8 @@ export interface ModerationResult {
 
 export const moderateContent = async (text: string): Promise<ModerationResult> => {
     try {
-        if (!process.env.OPENAI_API_KEY) {
-            console.warn('OPENAI_API_KEY not set. Skipping AI moderation.');
+        if (!openai) {
+            console.warn('OpenAI not configured. Skipping AI moderation.');
             return { flagged: false, categories: [], confidence: 0 };
         }
 
