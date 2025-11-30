@@ -5,6 +5,7 @@ import * as dotenv from 'dotenv';
 import { verifyWebhook, handleWebhookEvent } from './facebookWebhook';
 import { Worker } from 'bullmq';
 import { processComment } from './ruleEngine';
+import { initializeCronJobs, runManualCleanup } from './backgroundJobs';
 
 dotenv.config();
 
@@ -22,9 +23,22 @@ app.get('/status', (req, res) => {
 app.get('/webhook/facebook', verifyWebhook);
 app.post('/webhook/facebook', handleWebhookEvent);
 
+// Manual trigger for background jobs (for testing/admin)
+app.post('/admin/cleanup', async (req, res) => {
+    try {
+        await runManualCleanup();
+        res.status(200).json({ message: 'Cleanup tasks completed' });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Start Server
 app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    console.log(`🚀 Server is running on port ${PORT}`);
+
+    // Initialize cron jobs
+    initializeCronJobs();
 });
 
 // Initialize Queue Worker
