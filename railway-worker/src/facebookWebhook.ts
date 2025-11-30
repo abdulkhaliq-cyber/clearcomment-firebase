@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { Queue } from 'bullmq';
 import * as dotenv from 'dotenv';
+import * as crypto from 'crypto';
+import { db } from './firestore';
 
 dotenv.config();
 
@@ -25,6 +27,27 @@ if (process.env.REDIS_HOST) {
     console.warn('⚠️  REDIS_HOST not set. Comments will be processed synchronously.');
 }
 
+// Verify Facebook signature
+const verifySignature = (req: Request): boolean => {
+    const signature = req.headers['x-hub-signature-256'] as string;
+    if (!signature || !process.env.FACEBOOK_APP_SECRET) {
+        return false;
+    }
+
+    const elements = signature.split('=');
+    const signatureHash = elements[1];
+
+    const expectedHash = crypto
+        .createHmac('sha256', process.env.FACEBOOK_APP_SECRET)
+        .update(JSON.stringify(req.body))
+        .digest('hex');
+
+    return crypto.timingSafeEqual(
+        Buffer.from(signatureHash),
+        Buffer.from(expectedHash)
+    );
+};
+
 export const verifyWebhook = (req: Request, res: Response) => {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -43,32 +66,66 @@ export const verifyWebhook = (req: Request, res: Response) => {
 };
 
 export const handleWebhookEvent = async (req: Request, res: Response) => {
+    // Verify request signature
+    if (process.env.FACEBOOK_APP_SECRET && !verifySignature(req)) {
+        console.error('Invalid signature');
+        return res.sendStatus(403);
+    }
+
     const body = req.body;
 
     if (body.object === 'page') {
-        for (const entry of body.entry) {
-            const webhookEvent = entry.messaging ? entry.messaging[0] : null;
-            // Note: Facebook comment events structure varies (changes, feed, etc.)
-            // This is a simplified handler for 'feed' changes or similar.
+        // Respond to Facebook immediately (required within 20 seconds)
+        res.status(200).send('EVENT_RECEIVED');
 
+        // Process events asynchronously
+        for (const entry of body.entry) {
             if (entry.changes) {
                 for (const change of entry.changes) {
-                    if (change.field === 'feed' && change.value.item === 'comment' && change.value.verb === 'add') {
+                    // Handle comment events
+                    if (change.field === 'feed' && change.value.item === 'comment') {
                         const commentData = {
                             commentId: change.value.comment_id,
                             pageId: entry.id,
-                            content: change.value.message,
-                            authorId: change.value.from.id,
+                            postId: change.value.post_id || change.value.parent_id,
+                            content: change.value.message || '',
+                            authorId: change.value.from?.id || 'unknown',
+                            authorName: change.value.from?.name || 'Unknown',
+                            createdAt: new Date(change.value.created_time * 1000 || Date.now()),
+                            verb: change.value.verb, // 'add', 'edit', 'remove'
                         };
 
-                        console.log('Received new comment:', commentData);
+                        // Skip if comment is being removed
+                        if (commentData.verb === 'remove') {
+                            console.log(`Comment ${commentData.commentId} removed, skipping processing`);
+                            continue;
+                        }
 
-                        // Add to queue for processing
+                        console.log('Received comment event:', commentData);
+
+                        // Check for idempotency - don't process same comment twice
+                        const existingComment = await db.collection('comments').doc(commentData.commentId).get();
+                        if (existingComment.exists) {
+                            console.log(`Comment ${commentData.commentId} already processed, skipping`);
+                            continue;
+                        }
+
+                        // Store comment in Firestore (backend-only write)
+                        await db.collection('comments').doc(commentData.commentId).set({
+                            ...commentData,
+                            status: 'visible',
+                            moderatedBy: null,
+                            processedAt: new Date(),
+                        });
+
+                        console.log(`Comment ${commentData.commentId} stored in Firestore`);
+
+                        // Add to queue for processing or process synchronously
                         if (commentQueue) {
                             await commentQueue.add('process-comment', commentData);
+                            console.log(`Comment ${commentData.commentId} added to queue`);
                         } else {
-                            console.warn('Queue not available, processing synchronously (not recommended for production)');
-                            // Fallback: import and run directly (circular dependency risk, handled dynamically)
+                            console.log('Processing comment synchronously');
                             const { processComment } = await import('./ruleEngine');
                             await processComment(commentData);
                         }
@@ -76,7 +133,6 @@ export const handleWebhookEvent = async (req: Request, res: Response) => {
                 }
             }
         }
-        res.status(200).send('EVENT_RECEIVED');
     } else {
         res.sendStatus(404);
     }

@@ -38,7 +38,16 @@ const Login = () => {
             const user = await loginWithFacebook();
             await handleLoginSuccess(user);
         } catch (err) {
-            setError('Failed to login with Facebook. Please try again.');
+            console.error('Error logging in with Facebook', err);
+            if (err.code === 'auth/popup-blocked') {
+                setError('Popup was blocked by your browser. Please allow popups for this site and try again.');
+            } else if (err.code === 'auth/popup-closed-by-user') {
+                setError('Login cancelled. Please try again.');
+            } else if (err.code === 'auth/unauthorized-domain') {
+                setError('This domain is not authorized. Please contact support.');
+            } else {
+                setError('Failed to login with Facebook. Please try again.');
+            }
         } finally {
             setLoading(false);
         }

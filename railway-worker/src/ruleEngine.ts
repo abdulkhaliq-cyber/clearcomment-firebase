@@ -1,11 +1,13 @@
 import { db } from './firestore';
 import { moderateContent } from './aiModeration';
+import axios from 'axios';
 
 interface CommentData {
     commentId: string;
     pageId: string;
     content: string;
     authorId: string;
+    postId?: string;
 }
 
 interface Rule {
@@ -74,22 +76,79 @@ const applyRuleAction = async (comment: CommentData, rule: Rule) => {
     }
 };
 
-const hideComment = async (commentId: string, pageId: string) => {
-    // TODO: Call Facebook API to hide comment
-    console.log(`[MOCK] Hiding comment ${commentId} on page ${pageId}`);
+// Get page access token from Firestore
+const getPageAccessToken = async (pageId: string): Promise<string | null> => {
+    try {
+        const pageDoc = await db.collection('pages').doc(pageId).get();
+        if (pageDoc.exists) {
+            return pageDoc.data()?.accessToken || null;
+        }
+        return null;
+    } catch (error) {
+        console.error('Error getting page access token:', error);
+        return null;
+    }
+};
 
-    // Update status in Firestore
-    await db.collection('comments').doc(commentId).update({
-        status: 'hidden',
-        moderatedBy: 'auto-rule'
-    });
+const hideComment = async (commentId: string, pageId: string) => {
+    try {
+        const accessToken = await getPageAccessToken(pageId);
+
+        if (!accessToken) {
+            console.warn(`No access token found for page ${pageId}, cannot hide comment`);
+            return;
+        }
+
+        // Call Facebook Graph API to hide comment
+        const response = await axios.post(
+            `https://graph.facebook.com/v18.0/${commentId}`,
+            { is_hidden: true },
+            { params: { access_token: accessToken } }
+        );
+
+        console.log(`✅ Comment ${commentId} hidden on Facebook`);
+
+        // Update status in Firestore
+        await db.collection('comments').doc(commentId).update({
+            status: 'hidden',
+            moderatedBy: 'auto-rule',
+            hiddenAt: new Date()
+        });
+    } catch (error: any) {
+        console.error(`Error hiding comment ${commentId}:`, error.response?.data || error.message);
+    }
 };
 
 const replyToComment = async (commentId: string, pageId: string, text: string) => {
-    // TODO: Call Facebook API to reply
-    console.log(`[MOCK] Replying to ${commentId}: "${text}"`);
+    try {
+        const accessToken = await getPageAccessToken(pageId);
 
-    // Log reply in Firestore (optional, or just in logs)
+        if (!accessToken) {
+            console.warn(`No access token found for page ${pageId}, cannot reply to comment`);
+            return;
+        }
+
+        // Call Facebook Graph API to reply to comment
+        const response = await axios.post(
+            `https://graph.facebook.com/v18.0/${commentId}/comments`,
+            { message: text },
+            { params: { access_token: accessToken } }
+        );
+
+        console.log(`✅ Replied to comment ${commentId}: "${text}"`);
+
+        // Log the reply
+        await db.collection('logs').add({
+            commentId: commentId,
+            pageId: pageId,
+            actionType: 'reply',
+            replyText: text,
+            replyId: response.data.id,
+            timestamp: new Date()
+        });
+    } catch (error: any) {
+        console.error(`Error replying to comment ${commentId}:`, error.response?.data || error.message);
+    }
 };
 
 const logAction = async (comment: CommentData, actionType: string, ruleId: string) => {
