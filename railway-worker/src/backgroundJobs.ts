@@ -9,7 +9,7 @@ export const cleanupOldLogs = async () => {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const oldLogsQuery = await db.collection('logs')
+        const oldLogsQuery = await db.collection('actionLogs')
             .where('timestamp', '<', thirtyDaysAgo)
             .get();
 
@@ -39,7 +39,7 @@ export const recheckUnmoderatedComments = async () => {
         // Find comments that are visible but haven't been moderated
         const uncommentsQuery = await db.collection('comments')
             .where('status', '==', 'visible')
-            .where('moderatedBy', '==', null)
+            .where('actionTaken', '==', null)
             .limit(50) // Process in batches
             .get();
 
@@ -51,8 +51,8 @@ export const recheckUnmoderatedComments = async () => {
             await processComment({
                 commentId: doc.id,
                 pageId: comment.pageId,
-                content: comment.content,
-                authorId: comment.authorId,
+                message: comment.message,
+                fromId: comment.fromId,
                 postId: comment.postId
             });
 
@@ -70,7 +70,7 @@ export const retryFailedActions = async () => {
     console.log('🔁 Retrying failed moderation actions...');
     try {
         // Find logs with failed actions (you could add a 'status' field to logs)
-        const failedActionsQuery = await db.collection('logs')
+        const failedActionsQuery = await db.collection('actionLogs')
             .where('status', '==', 'failed')
             .limit(20)
             .get();
@@ -90,13 +90,13 @@ export const retryFailedActions = async () => {
             await processComment({
                 commentId: log.commentId,
                 pageId: log.pageId,
-                content: comment.content || '',
-                authorId: comment.authorId || 'unknown',
+                message: comment.message || '',
+                fromId: comment.fromId || 'unknown',
                 postId: comment.postId
             });
 
             // Mark as retried
-            await db.collection('logs').doc(doc.id).update({
+            await db.collection('actionLogs').doc(doc.id).update({
                 status: 'retried',
                 retriedAt: new Date()
             });

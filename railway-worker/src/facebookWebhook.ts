@@ -10,11 +10,11 @@ dotenv.config();
 // Note: Requires Redis connection. If Redis is not available, we process synchronously.
 let commentQueue: Queue | null = null;
 
-if (process.env.REDIS_HOST) {
+if (process.env.REDIS_HOST || process.env.REDISHOST) {
     const redisConnection = {
-        host: process.env.REDIS_HOST,
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-        password: process.env.REDIS_PASSWORD,
+        host: process.env.REDIS_HOST || process.env.REDISHOST,
+        port: parseInt(process.env.REDIS_PORT || process.env.REDISPORT || '6379'),
+        password: process.env.REDIS_PASSWORD || process.env.REDISPASSWORD,
     };
 
     try {
@@ -88,9 +88,9 @@ export const handleWebhookEvent = async (req: Request, res: Response) => {
                             commentId: change.value.comment_id,
                             pageId: entry.id,
                             postId: change.value.post_id || change.value.parent_id,
-                            content: change.value.message || '',
-                            authorId: change.value.from?.id || 'unknown',
-                            authorName: change.value.from?.name || 'Unknown',
+                            message: change.value.message || '',
+                            fromId: change.value.from?.id || 'unknown',
+                            fromName: change.value.from?.name || 'Unknown',
                             createdAt: new Date(change.value.created_time * 1000 || Date.now()),
                             verb: change.value.verb, // 'add', 'edit', 'remove'
                         };
@@ -114,8 +114,8 @@ export const handleWebhookEvent = async (req: Request, res: Response) => {
                         await db.collection('comments').doc(commentData.commentId).set({
                             ...commentData,
                             status: 'visible',
-                            moderatedBy: null,
-                            processedAt: new Date(),
+                            actionTaken: null,
+                            receivedAt: new Date(),
                         });
 
                         console.log(`Comment ${commentData.commentId} stored in Firestore`);

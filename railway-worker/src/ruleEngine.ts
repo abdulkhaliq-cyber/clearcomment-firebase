@@ -5,17 +5,19 @@ import axios from 'axios';
 interface CommentData {
     commentId: string;
     pageId: string;
-    content: string;
-    authorId: string;
+    message: string;
+    fromId: string;
     postId?: string;
 }
 
 interface Rule {
-    ruleId: string;
-    type: 'block' | 'auto-reply' | 'hide';
-    keyword?: string;
+    id: string; // Firestore document ID
+    name: string;
+    triggerType: 'keyword' | 'ai';
+    action: 'block' | 'auto-reply' | 'hide';
+    keywords?: string[];
     replyText?: string;
-    isEnabled: boolean;
+    enabled: boolean;
 }
 
 export const processComment = async (comment: CommentData) => {
@@ -25,35 +27,40 @@ export const processComment = async (comment: CommentData) => {
         // 1. Fetch active rules for this page
         const rulesSnapshot = await db.collection('rules')
             .where('pageId', '==', comment.pageId)
-            .where('isEnabled', '==', true)
+            .where('enabled', '==', true)
             .get();
 
-        const rules = rulesSnapshot.docs.map(doc => doc.data() as Rule);
+        const rules = rulesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Rule));
         let actionTaken = false;
 
         // 2. Check Keyword Rules
         for (const rule of rules) {
-            if (rule.keyword && comment.content.toLowerCase().includes(rule.keyword.toLowerCase())) {
-                console.log(`Rule matched: ${rule.type} for keyword "${rule.keyword}"`);
+            if (rule.triggerType === 'keyword' && rule.keywords && rule.keywords.length > 0) {
+                const messageLower = comment.message.toLowerCase();
+                const matchedKeyword = rule.keywords.find(k => messageLower.includes(k.toLowerCase()));
 
-                await applyRuleAction(comment, rule);
-                actionTaken = true;
+                if (matchedKeyword) {
+                    console.log(`Rule matched: "${rule.name}" for keyword "${matchedKeyword}"`);
 
-                // Log the action
-                await logAction(comment, rule.type, rule.ruleId);
+                    await applyRuleAction(comment, rule);
+                    actionTaken = true;
 
-                if (rule.type === 'block' || rule.type === 'hide') break; // Stop processing if hidden/blocked
+                    // Log the action
+                    await logAction(comment, rule.action, rule.id, `Matched keyword: ${matchedKeyword}`);
+
+                    if (rule.action === 'block' || rule.action === 'hide') break; // Stop processing if hidden/blocked
+                }
             }
         }
 
         // 3. AI Moderation (if no blocking rule matched yet)
         if (!actionTaken) {
-            const aiResult = await moderateContent(comment.content);
+            const aiResult = await moderateContent(comment.message);
             if (aiResult.flagged) {
                 console.log(`AI Moderation flagged comment: ${aiResult.categories.join(', ')}`);
                 // Auto-hide flagged content
                 await hideComment(comment.commentId, comment.pageId);
-                await logAction(comment, 'hide', 'ai-moderation');
+                await logAction(comment, 'hide', 'ai-moderation', `AI flagged: ${aiResult.categories.join(', ')}`);
             }
         }
 
@@ -63,7 +70,7 @@ export const processComment = async (comment: CommentData) => {
 };
 
 const applyRuleAction = async (comment: CommentData, rule: Rule) => {
-    switch (rule.type) {
+    switch (rule.action) {
         case 'hide':
         case 'block':
             await hideComment(comment.commentId, comment.pageId);
@@ -81,7 +88,7 @@ const getPageAccessToken = async (pageId: string): Promise<string | null> => {
     try {
         const pageDoc = await db.collection('pages').doc(pageId).get();
         if (pageDoc.exists) {
-            return pageDoc.data()?.accessToken || null;
+            return pageDoc.data()?.pageToken || null;
         }
         return null;
     } catch (error) {
@@ -111,8 +118,8 @@ const hideComment = async (commentId: string, pageId: string) => {
         // Update status in Firestore
         await db.collection('comments').doc(commentId).update({
             status: 'hidden',
-            moderatedBy: 'auto-rule',
-            hiddenAt: new Date()
+            actionTaken: 'auto-rule',
+            updatedAt: new Date()
         });
     } catch (error: any) {
         console.error(`Error hiding comment ${commentId}:`, error.response?.data || error.message);
@@ -138,26 +145,27 @@ const replyToComment = async (commentId: string, pageId: string, text: string) =
         console.log(`✅ Replied to comment ${commentId}: "${text}"`);
 
         // Log the reply
-        await db.collection('logs').add({
+        await db.collection('actionLogs').add({
             commentId: commentId,
             pageId: pageId,
-            actionType: 'reply',
-            replyText: text,
-            replyId: response.data.id,
-            timestamp: new Date()
+            action: 'reply',
+            text: text,
+            timestamp: new Date(),
+            performedBy: 'system'
         });
     } catch (error: any) {
         console.error(`Error replying to comment ${commentId}:`, error.response?.data || error.message);
     }
 };
 
-const logAction = async (comment: CommentData, actionType: string, ruleId: string) => {
-    await db.collection('logs').add({
+const logAction = async (comment: CommentData, action: string, ruleId: string, text?: string) => {
+    await db.collection('actionLogs').add({
         commentId: comment.commentId,
         pageId: comment.pageId,
         ruleId: ruleId,
-        userId: 'system',
-        actionType: actionType,
+        performedBy: 'system',
+        action: action,
+        text: text || '',
         timestamp: new Date()
     });
 };

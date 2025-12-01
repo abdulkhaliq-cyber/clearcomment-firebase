@@ -3,6 +3,7 @@ import bodyParser from 'body-parser';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
 import { verifyWebhook, handleWebhookEvent } from './facebookWebhook';
+import { syncComments } from './syncComments';
 import { Worker } from 'bullmq';
 import { processComment } from './ruleEngine';
 import { initializeCronJobs, runManualCleanup } from './backgroundJobs';
@@ -22,6 +23,7 @@ app.get('/status', (req, res) => {
 
 app.get('/webhook/facebook', verifyWebhook);
 app.post('/webhook/facebook', handleWebhookEvent);
+app.post('/api/sync-comments', syncComments);
 
 // Manual trigger for background jobs (for testing/admin)
 app.post('/admin/cleanup', async (req, res) => {
@@ -43,11 +45,11 @@ app.listen(PORT, () => {
 
 // Initialize Queue Worker
 // Only start if Redis is configured
-if (process.env.REDIS_HOST) {
+if (process.env.REDIS_HOST || process.env.REDISHOST) {
     const redisConnection = {
-        host: process.env.REDIS_HOST,
-        port: parseInt(process.env.REDIS_PORT || '6379'),
-        password: process.env.REDIS_PASSWORD,
+        host: process.env.REDIS_HOST || process.env.REDISHOST,
+        port: parseInt(process.env.REDIS_PORT || process.env.REDISPORT || '6379'),
+        password: process.env.REDIS_PASSWORD || process.env.REDISPASSWORD,
     };
 
     const worker = new Worker('comment-processing', async job => {

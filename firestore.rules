@@ -3,57 +3,84 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper to check if user is authenticated
+    // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Helper to check if user matches the requested ID
     function isUser(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Users collection: uid, name, email, photoURL, role
+    function ownsPage(pageId) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/pages/$(pageId)).data.connectedBy == request.auth.uid;
+    }
+
+    // ========================================
+    // USERS Collection
+    // ========================================
     match /users/{userId} {
+      // Users can only read/write their own data
       allow read, write: if isUser(userId);
     }
 
-    // Pages collection: pageId, pageName, userId, accessToken, moderationEnabled
+    // ========================================
+    // PAGES Collection
+    // ========================================
     match /pages/{pageId} {
-      // Allow create if the userId in data matches the auth uid
-      allow create: if isUser(request.resource.data.userId);
-      // Allow read/write if the existing document's userId matches auth uid
-      allow read, update, delete: if isUser(resource.data.userId);
+      // Allow create/update if the user is setting themselves as the owner
+      allow write: if isAuthenticated() && 
+        request.resource.data.connectedBy == request.auth.uid;
+      
+      // Can read if they are the owner
+      allow read: if isAuthenticated() && 
+        resource.data.connectedBy == request.auth.uid;
     }
 
-    // Comments collection: commentId, pageId, content, authorId, createdAt, status, moderatedBy
+    // ========================================
+    // COMMENTS Collection
+    // ========================================
     match /comments/{commentId} {
-      // Writable ONLY by backend (Admin SDK bypasses these rules)
+      // Comments are ONLY writable by backend (Railway worker)
       allow write: if false;
       
-      // Readable if the user owns the page this comment belongs to
-      // Note: This requires a get() call which affects billing, but ensures security
+      // Users can read comments from pages they own
       allow read: if isAuthenticated() && 
-        get(/databases/$(database)/documents/pages/$(resource.data.pageId)).data.userId == request.auth.uid;
+        ownsPage(resource.data.pageId);
     }
 
-    // Rules collection: ruleId, pageId, type, keyword, replyText, isEnabled
+    // ========================================
+    // RULES Collection
+    // ========================================
     match /rules/{ruleId} {
-      // Allow create if user owns the referenced page
+      // Can create if they own the page
       allow create: if isAuthenticated() && 
-        get(/databases/$(database)/documents/pages/$(request.resource.data.pageId)).data.userId == request.auth.uid;
-        
-      // Allow read/write if user owns the referenced page
+        ownsPage(request.resource.data.pageId);
+      
+      // Can read/update/delete if they own the page
       allow read, update, delete: if isAuthenticated() && 
-        get(/databases/$(database)/documents/pages/$(resource.data.pageId)).data.userId == request.auth.uid;
+        ownsPage(resource.data.pageId);
     }
 
-    // Logs collection: actionId, commentId, ruleId, userId, actionType, timestamp
-    match /logs/{logId} {
-      // Writable ONLY by backend
+    // ========================================
+    // ACTION LOGS Collection
+    // ========================================
+    match /actionLogs/{logId} {
+      // Logs are ONLY writable by backend
       allow write: if false;
-      // Readable by the user associated with the log
-      allow read: if isUser(resource.data.userId);
+      
+      // Users can read logs from pages they own
+      allow read: if isAuthenticated() && 
+        ownsPage(resource.data.pageId);
+    }
+
+    // ========================================
+    // SETTINGS Collection
+    // ========================================
+    match /settings/{userId} {
+      // Users can only read/write their own settings
+      allow read, write: if isUser(userId);
     }
   }
 }

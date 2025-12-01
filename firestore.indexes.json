@@ -9,11 +9,35 @@
                     "order": "ASCENDING"
                 },
                 {
-                    "fieldPath": "status",
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "rules",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "pageId",
                     "order": "ASCENDING"
                 },
                 {
                     "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "actionLogs",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "pageId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "timestamp",
                     "order": "DESCENDING"
                 }
             ]
