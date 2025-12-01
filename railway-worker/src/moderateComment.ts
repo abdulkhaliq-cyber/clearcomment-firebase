@@ -40,7 +40,11 @@ export const moderateComment = async (req: Request, res: Response) => {
 
         // 3. Call Facebook Graph API to hide/unhide
         const isHidden = action === 'hide';
-        const fbCommentId = commentData?.fbCommentId || commentId;
+        const fbCommentId = commentData?.commentId;
+
+        if (!fbCommentId) {
+            return res.status(400).json({ error: 'Comment has no Facebook comment ID' });
+        }
 
         await axios.post(
             `https://graph.facebook.com/v18.0/${fbCommentId}`,
@@ -68,6 +72,24 @@ export const moderateComment = async (req: Request, res: Response) => {
 
     } catch (error: any) {
         console.error('Error moderating comment:', error.response?.data || error);
+
+        // Handle "already hidden" error gracefully (error_subcode 1446036)
+        if (error.response?.data?.error?.error_subcode === 1446036) {
+            // Comment is already in the desired state, update Firestore anyway
+            const isHidden = action === 'hide';
+            await db.collection('comments').doc(commentId).update({
+                status: isHidden ? 'hidden' : 'visible',
+                actionTaken: 'manual',
+                lastModeratedAt: new Date()
+            });
+
+            return res.status(200).json({
+                message: `Comment already ${action}d on Facebook`,
+                commentId,
+                status: isHidden ? 'hidden' : 'visible'
+            });
+        }
+
         res.status(500).json({
             error: 'Failed to moderate comment: ' + (error.response?.data?.error?.message || error.message)
         });
