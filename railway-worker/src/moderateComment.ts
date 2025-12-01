@@ -40,13 +40,18 @@ export const moderateComment = async (req: Request, res: Response) => {
 
         // 3. Call Facebook Graph API to hide/unhide
         const isHidden = action === 'hide';
-        await axios.post(`https://graph.facebook.com/v18.0/${commentId}`, {
-            is_hidden: isHidden
-        }, {
-            params: {
-                access_token: pageToken
+        const fbCommentId = commentData?.fbCommentId || commentId;
+
+        await axios.post(
+            `https://graph.facebook.com/v18.0/${fbCommentId}`,
+            null,
+            {
+                params: {
+                    is_hidden: isHidden,
+                    access_token: pageToken
+                }
             }
-        });
+        );
 
         // 4. Update Firestore
         await db.collection('comments').doc(commentId).update({
