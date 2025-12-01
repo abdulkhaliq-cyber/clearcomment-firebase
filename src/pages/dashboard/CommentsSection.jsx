@@ -80,31 +80,48 @@ const CommentsSection = ({ pageId }) => {
 
     const handleBulkAction = async (action) => {
         try {
-            const updates = selectedComments.map(commentId =>
-                updateDoc(doc(db, 'comments', commentId), {
-                    status: action === 'hide' ? 'hidden' : 'visible',
-                    moderatedBy: 'manual'
+            // Call backend for each comment
+            const promises = selectedComments.map(commentId =>
+                fetch(`${RAILWAY_URL}/api/moderate-comment`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        commentId,
+                        action: action === 'hide' ? 'hide' : 'unhide'
+                    })
                 })
             );
-            await Promise.all(updates);
+
+            await Promise.all(promises);
             setSelectedComments([]);
-            // In a real app, use a toast notification here
-            console.log(`${selectedComments.length} comments ${action === 'hide' ? 'hidden' : 'unhidden'} successfully`);
+            alert(`${selectedComments.length} comments ${action === 'hide' ? 'hidden' : 'unhidden'} successfully on Facebook!`);
         } catch (error) {
             console.error('Error performing bulk action:', error);
-            alert('Error performing action');
+            alert('Error performing action: ' + error.message);
         }
     };
 
     const handleSingleAction = async (commentId, action) => {
         try {
-            await updateDoc(doc(db, 'comments', commentId), {
-                status: action === 'hide' ? 'hidden' : 'visible',
-                moderatedBy: 'manual'
+            const response = await fetch(`${RAILWAY_URL}/api/moderate-comment`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    commentId,
+                    action: action === 'hide' ? 'hide' : 'unhide'
+                })
             });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to moderate comment');
+            }
+
+            const result = await response.json();
+            console.log('Comment moderated:', result);
         } catch (error) {
             console.error('Error performing action:', error);
-            alert('Error performing action');
+            alert('Error performing action: ' + error.message);
         }
     };
 

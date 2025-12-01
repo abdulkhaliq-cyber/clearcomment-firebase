@@ -70,29 +70,33 @@ const Dashboard = () => {
         }
 
         console.log("Initiating FB.login...");
-        window.FB.login(async (response) => {
-            console.log("FB.login response:", response);
-            if (response.authResponse) {
-                const accessToken = response.authResponse.accessToken;
+        window.FB.login((response) => {
+            // Wrap async logic in an IIFE (Immediately Invoked Function Expression)
+            // because FB SDK might not like async callbacks directly
+            (async () => {
+                console.log("FB.login response:", response);
+                if (response.authResponse) {
+                    const accessToken = response.authResponse.accessToken;
 
-                try {
-                    const apiResponse = await fetch(`https://graph.facebook.com/v18.0/me/accounts?access_token=${accessToken}`);
-                    const data = await apiResponse.json();
+                    try {
+                        const apiResponse = await fetch(`https://graph.facebook.com/v18.0/me/accounts?access_token=${accessToken}`);
+                        const data = await apiResponse.json();
 
-                    if (data.data && data.data.length > 0) {
-                        setAvailablePages(data.data);
-                        setShowPageSelectionModal(true);
-                    } else {
-                        alert("No Facebook Pages found for this account.");
+                        if (data.data && data.data.length > 0) {
+                            setAvailablePages(data.data);
+                            setShowPageSelectionModal(true);
+                        } else {
+                            alert("No Facebook Pages found for this account.");
+                        }
+                    } catch (error) {
+                        console.error("Error fetching pages:", error);
+                        alert("Failed to fetch pages: " + error.message);
                     }
-                } catch (error) {
-                    console.error("Error fetching pages:", error);
-                    alert("Failed to fetch pages: " + error.message);
+                } else {
+                    console.log('User cancelled login or did not fully authorize.');
                 }
-            } else {
-                console.log('User cancelled login or did not fully authorize.');
-            }
-            setConnecting(false);
+                setConnecting(false);
+            })();
         }, {
             scope: 'pages_show_list,pages_read_engagement,pages_manage_metadata,pages_manage_posts,pages_manage_engagement'
         });

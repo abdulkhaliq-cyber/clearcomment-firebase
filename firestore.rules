@@ -42,8 +42,12 @@ service cloud.firestore {
     // COMMENTS Collection
     // ========================================
     match /comments/{commentId} {
-      // Comments are ONLY writable by backend (Railway worker)
-      allow write: if false;
+      // Users can update comments (e.g. hide/unhide) if they own the page
+      allow update: if isAuthenticated() && 
+        ownsPage(resource.data.pageId);
+      
+      // Only backend creates comments (via Admin SDK which bypasses rules)
+      allow create: if false;
       
       // Users can read comments from pages they own
       allow read: if isAuthenticated() && 
