@@ -46,6 +46,7 @@ export const moderateComment = async (req: Request, res: Response) => {
             return res.status(400).json({ error: 'Comment has no Facebook comment ID' });
         }
 
+        console.log(`Calling Facebook API to ${action} comment ${fbCommentId}...`);
         await axios.post(
             `https://graph.facebook.com/v18.0/${fbCommentId}`,
             null,
@@ -56,13 +57,16 @@ export const moderateComment = async (req: Request, res: Response) => {
                 }
             }
         );
+        console.log(`Facebook API call successful for comment ${fbCommentId}`);
 
         // 4. Update Firestore
+        console.log(`Updating Firestore document ${commentId}...`);
         await db.collection('comments').doc(commentId).update({
             status: isHidden ? 'hidden' : 'visible',
             actionTaken: 'manual',
             lastModeratedAt: new Date()
         });
+        console.log(`Firestore updated successfully for comment ${commentId}`);
 
         res.status(200).json({
             message: `Comment ${action}d successfully`,
