@@ -34,10 +34,13 @@ export const syncComments = async (req: Request, res: Response) => {
 
         const posts = response.data.data || [];
         let count = 0;
+        const activeCommentIds = new Set<string>();
 
         for (const post of posts) {
             if (post.comments && post.comments.data) {
                 for (const comment of post.comments.data) {
+                    activeCommentIds.add(comment.id);
+
                     const commentData = {
                         commentId: comment.id,
                         pageId: pageId,
@@ -47,21 +50,34 @@ export const syncComments = async (req: Request, res: Response) => {
                         fromName: comment.from?.name || 'Unknown',
                         createdAt: new Date(comment.created_time),
                         status: comment.is_hidden ? 'hidden' : 'visible',
-                        // Don't overwrite actionTaken if it exists
-                        // actionTaken: null, 
+                        isDeleted: false,
                         lastSyncedAt: new Date()
                     };
 
-                    // Store in Firestore
-                    // Using merge: true to avoid overwriting existing moderation status if we were to sync again
-                    // But we want to ensure new fields are set.
                     await db.collection('comments').doc(comment.id).set(commentData, { merge: true });
                     count++;
                 }
             }
         }
 
-        console.log(`Synced ${count} comments for page ${pageId}`);
+        // Mark comments not in activeCommentIds as deleted
+        const allCommentsSnapshot = await db.collection('comments')
+            .where('pageId', '==', pageId)
+            .get();
+
+        let deletedCount = 0;
+        for (const doc of allCommentsSnapshot.docs) {
+            const commentId = doc.data().commentId;
+            if (!activeCommentIds.has(commentId) && !doc.data().isDeleted) {
+                await db.collection('comments').doc(doc.id).update({
+                    isDeleted: true,
+                    deletedAt: new Date()
+                });
+                deletedCount++;
+            }
+        }
+
+        console.log(`Synced ${count} comments for page ${pageId}, marked ${deletedCount} as deleted`);
         res.status(200).json({ message: 'Sync complete', count });
 
     } catch (error: any) {

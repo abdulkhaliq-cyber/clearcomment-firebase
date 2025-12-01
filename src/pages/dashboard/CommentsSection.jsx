@@ -32,11 +32,13 @@ const CommentsSection = ({ pageId }) => {
         );
 
         const unsubscribe = onSnapshot(commentsQuery, (snapshot) => {
+            console.log('Firestore snapshot received, document count:', snapshot.docs.length);
             const commentsData = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
                 createdAt: doc.data().createdAt?.toDate()
             }));
+            console.log('Comments data updated:', commentsData.length, 'comments');
             setComments(commentsData);
             setFilteredComments(commentsData);
             setLoading(false);
@@ -299,19 +301,29 @@ const CommentsSection = ({ pageId }) => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <div className="text-sm text-gray-900 break-words max-w-xl">{comment.message}</div>
+                                        <div className={`text-sm break-words max-w-xl ${comment.isDeleted ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                                            {comment.message}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${comment.status === 'visible'
-                                            ? 'bg-green-100 text-green-800'
-                                            : 'bg-red-100 text-red-800'
-                                            }`}>
-                                            {comment.status}
-                                        </span>
-                                        {comment.actionTaken === 'ai-hide' && (
-                                            <span className="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
-                                                AI
+                                        {comment.isDeleted ? (
+                                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-600">
+                                                DELETED
                                             </span>
+                                        ) : (
+                                            <>
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${comment.status === 'visible'
+                                                    ? 'bg-green-100 text-green-800'
+                                                    : 'bg-red-100 text-red-800'
+                                                    }`}>
+                                                    {comment.status}
+                                                </span>
+                                                {comment.actionTaken === 'ai-hide' && (
+                                                    <span className="ml-2 px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
+                                                        AI
+                                                    </span>
+                                                )}
+                                            </>
                                         )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -321,32 +333,38 @@ const CommentsSection = ({ pageId }) => {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <div className="flex items-center justify-end gap-2">
-                                            <button
-                                                onClick={() => alert("Reply feature coming soon!")}
-                                                className="text-indigo-600 hover:text-indigo-900 p-1 rounded-full hover:bg-indigo-50"
-                                                title="Reply"
-                                            >
-                                                <ChatBubbleLeftEllipsisIcon className="h-5 w-5" />
-                                            </button>
-                                            {comment.status === 'visible' ? (
+                                        {comment.isDeleted ? (
+                                            <div className="text-xs text-gray-400 italic">
+                                                Post deleted on Facebook
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-end gap-2">
                                                 <button
-                                                    onClick={() => handleSingleAction(comment.id, 'hide')}
-                                                    className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50"
-                                                    title="Hide"
+                                                    onClick={() => alert("Reply feature coming soon!")}
+                                                    className="text-indigo-600 hover:text-indigo-900 p-1 rounded-full hover:bg-indigo-50"
+                                                    title="Reply"
                                                 >
-                                                    <EyeSlashIcon className="h-5 w-5" />
+                                                    <ChatBubbleLeftEllipsisIcon className="h-5 w-5" />
                                                 </button>
-                                            ) : (
-                                                <button
-                                                    onClick={() => handleSingleAction(comment.id, 'unhide')}
-                                                    className="text-green-600 hover:text-green-900 p-1 rounded-full hover:bg-green-50"
-                                                    title="Unhide"
-                                                >
-                                                    <EyeIcon className="h-5 w-5" />
-                                                </button>
-                                            )}
-                                        </div>
+                                                {comment.status === 'visible' ? (
+                                                    <button
+                                                        onClick={() => handleSingleAction(comment.id, 'hide')}
+                                                        className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50"
+                                                        title="Hide"
+                                                    >
+                                                        <EyeSlashIcon className="h-5 w-5" />
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleSingleAction(comment.id, 'unhide')}
+                                                        className="text-green-600 hover:text-green-900 p-1 rounded-full hover:bg-green-50"
+                                                        title="Unhide"
+                                                    >
+                                                        <EyeIcon className="h-5 w-5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
                                     </td>
                                 </tr>
                             ))
