@@ -106,11 +106,16 @@ const hideComment = async (commentId: string, pageId: string) => {
             return;
         }
 
-        // Call Facebook Graph API to hide comment
-        const response = await axios.post(
+        // Call Facebook Graph API to hide comment (using query params, not body)
+        await axios.post(
             `https://graph.facebook.com/v18.0/${commentId}`,
-            { is_hidden: true },
-            { params: { access_token: accessToken } }
+            null,
+            {
+                params: {
+                    is_hidden: true,
+                    access_token: accessToken
+                }
+            }
         );
 
         console.log(`✅ Comment ${commentId} hidden on Facebook`);
@@ -118,10 +123,21 @@ const hideComment = async (commentId: string, pageId: string) => {
         // Update status in Firestore
         await db.collection('comments').doc(commentId).update({
             status: 'hidden',
-            actionTaken: 'auto-rule',
-            updatedAt: new Date()
+            actionTaken: 'ai-hide',
+            lastModeratedAt: new Date()
         });
     } catch (error: any) {
+        // Handle "already hidden" error gracefully
+        if (error.response?.data?.error?.error_subcode === 1446036) {
+            console.log(`Comment ${commentId} is already hidden on Facebook, updating Firestore...`);
+            await db.collection('comments').doc(commentId).update({
+                status: 'hidden',
+                actionTaken: 'ai-hide',
+                lastModeratedAt: new Date()
+            });
+            return;
+        }
+
         console.error(`Error hiding comment ${commentId}:`, error.response?.data || error.message);
     }
 };

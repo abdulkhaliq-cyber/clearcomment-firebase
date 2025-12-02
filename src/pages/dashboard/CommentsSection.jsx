@@ -18,6 +18,7 @@ const CommentsSection = ({ pageId }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
+    const [applyingRules, setApplyingRules] = useState(false);
 
     const RAILWAY_URL = import.meta.env.VITE_RAILWAY_URL || 'http://localhost:3000';
 
@@ -168,6 +169,34 @@ const CommentsSection = ({ pageId }) => {
         }
     };
 
+    const handleApplyRules = async () => {
+        if (!pageId) return;
+
+        setApplyingRules(true);
+        try {
+            const response = await fetch(`${import.meta.env.VITE_RAILWAY_URL}/api/apply-rules`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ pageId })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Server responded with ${response.status}: ${errorText}`);
+            }
+
+            const result = await response.json();
+            alert(`Processed ${result.processedCount || 0} comments, ${result.hiddenCount || 0} were hidden!`);
+        } catch (error) {
+            console.error('Error applying rules:', error);
+            alert(`Failed to apply rules: ${error.message}`);
+        } finally {
+            setApplyingRules(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex justify-center items-center h-64">
@@ -207,14 +236,24 @@ const CommentsSection = ({ pageId }) => {
                             <option value="hidden">Hidden</option>
                         </select>
                     </div>
-                    <button
-                        onClick={handleSyncComments}
-                        disabled={syncing}
-                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-xl shadow-md text-white bg-gradient-to-r from-primary-600 to-accent-600 hover:from-primary-700 hover:to-accent-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-all transform hover:scale-105"
-                    >
-                        <ArrowPathIcon className={`-ml-1 mr-2 h-5 w-5 ${syncing ? 'animate-spin' : ''}`} aria-hidden="true" />
-                        {syncing ? 'Syncing...' : 'Sync Comments'}
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleApplyRules}
+                            disabled={applyingRules}
+                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-xl shadow-md text-white bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 transition-all transform hover:scale-105"
+                        >
+                            <ArrowPathIcon className={`-ml-1 mr-2 h-5 w-5 ${applyingRules ? 'animate-spin' : ''}`} aria-hidden="true" />
+                            {applyingRules ? 'Applying...' : 'Apply Rules'}
+                        </button>
+                        <button
+                            onClick={handleSyncComments}
+                            disabled={syncing}
+                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-semibold rounded-xl shadow-md text-white bg-gradient-to-r from-primary-600 to-accent-600 hover:from-primary-700 hover:to-accent-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-all transform hover:scale-105"
+                        >
+                            <ArrowPathIcon className={`-ml-1 mr-2 h-5 w-5 ${syncing ? 'animate-spin' : ''}`} aria-hidden="true" />
+                            {syncing ? 'Syncing...' : 'Sync Comments'}
+                        </button>
+                    </div>
                 </div>
 
                 {selectedComments.length > 0 && (

@@ -5,6 +5,7 @@ import * as dotenv from 'dotenv';
 import { verifyWebhook, handleWebhookEvent } from './facebookWebhook';
 import { syncComments } from './syncComments';
 import { moderateComment } from './moderateComment';
+import { applyRules } from './applyRules';
 import { Worker } from 'bullmq';
 import { processComment } from './ruleEngine';
 import { initializeCronJobs, runManualCleanup } from './backgroundJobs';
@@ -26,6 +27,7 @@ app.get('/webhook/facebook', verifyWebhook);
 app.post('/webhook/facebook', handleWebhookEvent);
 app.post('/api/sync-comments', syncComments);
 app.post('/api/moderate-comment', moderateComment);
+app.post('/api/apply-rules', applyRules);
 
 // Manual trigger for background jobs (for testing/admin)
 app.post('/admin/cleanup', async (req, res) => {
