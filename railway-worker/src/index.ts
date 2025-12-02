@@ -9,6 +9,7 @@ import { applyRules } from './applyRules';
 import { Worker } from 'bullmq';
 import { processComment } from './ruleEngine';
 import { initializeCronJobs, runManualCleanup } from './backgroundJobs';
+import { handleDataDeletion } from './dataDeletion';
 
 dotenv.config();
 
@@ -28,6 +29,7 @@ app.post('/webhook/facebook', handleWebhookEvent);
 app.post('/api/sync-comments', syncComments);
 app.post('/api/moderate-comment', moderateComment);
 app.post('/api/apply-rules', applyRules);
+app.post('/data-deletion', handleDataDeletion);
 
 // Manual trigger for background jobs (for testing/admin)
 app.post('/admin/cleanup', async (req, res) => {
