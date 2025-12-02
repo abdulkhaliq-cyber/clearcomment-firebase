@@ -75,10 +75,9 @@ export const moderateComment = async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
-        console.error('Error moderating comment:', error.response?.data || error);
-
         // Handle "already hidden" error gracefully (error_subcode 1446036)
         if (error.response?.data?.error?.error_subcode === 1446036) {
+            console.log(`Comment ${commentId} is already ${action}d on Facebook, updating Firestore...`);
             // Comment is already in the desired state, update Firestore anyway
             const isHidden = action === 'hide';
             await db.collection('comments').doc(commentId).update({
@@ -94,6 +93,8 @@ export const moderateComment = async (req: Request, res: Response) => {
             });
         }
 
+        // Only log actual errors
+        console.error('Error moderating comment:', error.response?.data || error);
         res.status(500).json({
             error: 'Failed to moderate comment: ' + (error.response?.data?.error?.message || error.message)
         });
