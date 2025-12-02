@@ -19,7 +19,8 @@ const RulesSection = ({ pageId }) => {
         keywords: '', // Will be split into array on save
         action: 'hide',
         replyText: '',
-        enabled: true
+        enabled: true,
+        applyImmediately: false
     });
 
     useEffect(() => {
@@ -58,9 +59,37 @@ const RulesSection = ({ pageId }) => {
                 createdAt: new Date(),
                 // createdBy: user.uid // Need to pass user prop to RulesSection
             });
-            setNewRule({ name: '', triggerType: 'keyword', keywords: '', action: 'hide', replyText: '', enabled: true });
-            setShowCreateForm(false);
+
             console.log('Rule created successfully!');
+
+            // Apply rule to existing comments if requested
+            if (newRule.applyImmediately && newRule.enabled) {
+                console.log('Applying rule to existing comments...');
+                try {
+                    const response = await fetch(`${import.meta.env.VITE_RAILWAY_URL}/api/apply-rules`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ pageId })
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        alert(`Rule created! Processed ${result.processedCount || 0} comments, ${result.hiddenCount || 0} were hidden.`);
+                    } else {
+                        alert('Rule created, but failed to apply to existing comments. Click "Apply Rules" button to try again.');
+                    }
+                } catch (error) {
+                    console.error('Error applying rules:', error);
+                    alert('Rule created, but failed to apply to existing comments. Click "Apply Rules" button to try again.');
+                }
+            } else {
+                alert('Rule created successfully!');
+            }
+
+            setNewRule({ name: '', triggerType: 'keyword', keywords: '', action: 'hide', replyText: '', enabled: true, applyImmediately: false });
+            setShowCreateForm(false);
         } catch (error) {
             console.error('Error creating rule:', error);
             alert('Error creating rule');
@@ -304,6 +333,18 @@ const RulesSection = ({ pageId }) => {
                                                         />
                                                         <label className="ml-2 text-sm text-gray-700">
                                                             Enable rule immediately
+                                                        </label>
+                                                    </div>
+
+                                                    <div className="flex items-center">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={newRule.applyImmediately}
+                                                            onChange={(e) => setNewRule({ ...newRule, applyImmediately: e.target.checked })}
+                                                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                        />
+                                                        <label className="ml-2 text-sm text-gray-700">
+                                                            Apply to existing comments immediately
                                                         </label>
                                                     </div>
 
